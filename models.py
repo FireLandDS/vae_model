@@ -1,5 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
 import torch as th
 import torch.nn as nn
 import torch.nn.functional as F
@@ -7,33 +5,8 @@ import torchvision.models as models
 
 from .custom_layers import GaussianNoiseVariant
 
-try:
-    from preprocessing.preprocess import getNChannels
-except ImportError:
-    from ..preprocessing.preprocess import getNChannels
 
-
-class BaseModelSRL(nn.Module):
-    """
-    Base Class for a SRL network
-    It implements a getState method to retrieve a state from observations
-    """
-
-    def __init__(self):
-        super(BaseModelSRL, self).__init__()
-
-    def getStates(self, observations):
-        """
-        :param observations: (th.Tensor)
-        :return: (th.Tensor)
-        """
-        return self.forward(observations)
-
-    def forward(self, x):
-        raise NotImplementedError
-
-
-class BaseModelAutoEncoder(BaseModelSRL):
+class BaseModelAutoEncoder(nn.Module):
     """
     Base Class for a SRL network (autoencoder family)
     It implements a getState method to retrieve a state from observations
@@ -45,8 +18,8 @@ class BaseModelAutoEncoder(BaseModelSRL):
         # Inspired by ResNet:
         # conv3x3 followed by BatchNorm2d
         self.encoder_conv = nn.Sequential(
-            # 224x224xN_CHANNELS -> 112x112x64
-            nn.Conv2d(getNChannels(), 64, kernel_size=7, stride=2, padding=3, bias=False),
+            # 224x224x3 -> 112x112x64
+            nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False),
             nn.BatchNorm2d(64),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=3, stride=2, padding=1),  # 56x56x64
@@ -79,15 +52,8 @@ class BaseModelAutoEncoder(BaseModelSRL):
             nn.BatchNorm2d(64),
             nn.ReLU(True),
 
-            nn.ConvTranspose2d(64, getNChannels(), kernel_size=4, stride=2),  # 224x224xN_CHANNELS
+            nn.ConvTranspose2d(64, 3, kernel_size=4, stride=2),  # 224x224x3
         )
-
-    def getStates(self, observations):
-        """
-        :param observations: (th.Tensor)
-        :return: (th.Tensor)
-        """
-        return self.encode(observations)
 
     def encode(self, x):
         """
@@ -116,33 +82,11 @@ class BaseModelAutoEncoder(BaseModelSRL):
 
 class BaseModelVAE(BaseModelAutoEncoder):
     """
-    Base Class for a SRL network (VAE family)
-    It implements a getState method to retrieve a state from observations
+    Base Class for VAE family
     """
 
     def __init__(self):
         super(BaseModelVAE, self).__init__()
-
-    def getStates(self, observations):
-        """
-        :param observations: (th.Tensor)
-        :return: (th.Tensor)
-        """
-        return self.encode(observations)[0]
-
-    def encode(self, x):
-        """
-        :param x: (th.Tensor)
-        :return: (th.Tensor)
-        """
-        raise NotImplementedError
-
-    def decode(self, x):
-        """
-        :param x: (th.Tensor)
-        :return: (th.Tensor)
-        """
-        raise NotImplementedError
 
     def reparameterize(self, mu, logvar):
         """
@@ -176,44 +120,6 @@ class BaseModelVAE(BaseModelAutoEncoder):
         return decoded, mu, logvar
 
 
-class CustomCNN(BaseModelSRL):
-    """
-    Convolutional Neural Network
-    input shape : 3-channel RGB images of shape (3 x H x W), where H and W are expected to be at least 224
-    :param state_dim: (int)
-    """
-
-    def __init__(self, state_dim=2):
-        super(CustomCNN, self).__init__()
-        # Inspired by ResNet:
-        # conv3x3 followed by BatchNorm2d
-        self.conv_layers = nn.Sequential(
-            # 224x224x3 -> 112x112x64
-            nn.Conv2d(getNChannels(), 64, kernel_size=7, stride=2, padding=3, bias=False),
-            nn.BatchNorm2d(64),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=3, stride=2, padding=1),  # 56x56x64
-
-            conv3x3(in_planes=64, out_planes=64, stride=1),  # 56x56x64
-            nn.BatchNorm2d(64),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=3, stride=2),  # 27x27x64
-
-            conv3x3(in_planes=64, out_planes=64, stride=2),  # 14x14x64
-            nn.BatchNorm2d(64),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=3, stride=2)  # 6x6x64
-        )
-
-        self.fc = nn.Linear(6 * 6 * 64, state_dim)
-
-    def forward(self, x):
-        x = self.conv_layers(x)
-        x = x.view(x.size(0), -1)
-        x = self.fc(x)
-        return x
-
-
 def conv3x3(in_planes, out_planes, stride=1):
     """"
     From PyTorch Resnet implementation
@@ -224,14 +130,3 @@ def conv3x3(in_planes, out_planes, stride=1):
     """
     return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
                      padding=1, bias=False)
-
-
-def encodeOneHot(tensor, n_dim):
-    """
-    One hot encoding for a given tensor
-    :param tensor: (th Tensor)
-    :param n_dim: (int) Number of dimensions
-    :return: (th.Tensor)
-    """
-    encoded_tensor = th.Tensor(tensor.shape[0], n_dim).zero_().to(tensor.device)
-    return encoded_tensor.scatter_(1, tensor.data, 1.)
