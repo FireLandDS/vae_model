@@ -2,9 +2,5 @@
 vae model
 
 
-**real**
-![real](./data//carla_32/real_image.png)
-
-
-**generated**
-![generated](./data/carla_32/generated.png)
+**real-generated**
+![real-generated](./data/carla_32/48_epoch_sample_image.png)
