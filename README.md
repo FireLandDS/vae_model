@@ -1,9 +1,10 @@
 # vae
 vae model
 
+
 **real**
+![real](./data//carla_32/real_image.png)
 
-![real](./data//Carla/real.png)
+
 **generated**
-
-![generated](./data/Carla/generated.png)
+![generated](./data/carla_32/generated.png)
